@@ -1,21 +1,21 @@
 {% extends 'base.html' %}
 
-{% block title %}Network Anomaly Detection{% endblock %}
+{% block title %}Critical Threat Detection{% endblock %}
 
 {% block content %}
 <div class="container">
-    <h1 class="mt-4 mb-4">Network Anomaly Detection Dashboard</h1>
+    <h1 class="mt-4 mb-4">Critical Threat Detection Dashboard</h1>
     
     <div class="row mb-4">
         <div class="col-md-12">
             <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Detection Controls</h5>
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="fas fa-shield-alt"></i> Detection Controls</h5>
                 </div>
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-6">
-                            <form id="detection-form" method="POST" action="{{ url_for('anomaly.start_anomaly_detection_route') }}">
+                            <form id="detection-form" method="POST" action="javascript:void(0);" onsubmit="return false;">
                                 <div class="form-group">
                                     <label for="dataset">Dataset Selection:</label>
                                     <select class="form-control" id="dataset" name="dataset">
@@ -31,7 +31,11 @@
                                     <label for="sleep_interval">Interval (seconds):</label>
                                     <input type="number" class="form-control" id="sleep_interval" name="sleep_interval" value="5">
                                 </div>
-                                <button type="submit" class="btn btn-success" id="start-detection">
+                                <div class="form-group form-check">
+                                    <input type="checkbox" class="form-check-input" id="auto_report" name="auto_report" checked>
+                                    <label class="form-check-label" for="auto_report">Automatically report critical threats to /threat endpoint</label>
+                                </div>
+                                <button type="button" class="btn btn-success" id="start-detection">
                                     <i class="fas fa-play"></i> Start Detection
                                 </button>
                                 <button type="button" class="btn btn-danger" id="stop-detection">
@@ -59,11 +63,64 @@
         </div>
     </div>
     
+    <!-- Critical Threats Section -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-exclamation-triangle"></i> All Detected Threats
+                        <small id="threat-refresh-indicator" class="ml-2">
+                            <i class="fas fa-sync fa-spin text-light" style="font-size: 0.8em;"></i> 
+                            <span style="font-size: 0.8em;">Live updates</span>
+                        </small>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="threat-summary mb-3">
+                        <div class="row">
+                            <div class="col-md-12">
+                                <span class="badge badge-danger mr-2">Critical: <span id="critical-count">0</span></span>
+                                <span class="badge badge-warning mr-2">High: <span id="high-count">0</span></span>
+                                <span class="badge badge-info mr-2">Medium: <span id="medium-count">0</span></span>
+                                <span class="badge badge-secondary">Low: <span id="low-count">0</span></span>
+                                <span class="ml-3 text-muted">Total threats: <span id="total-threats">0</span></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped" id="critical-threats-table">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Source</th>
+                                    <th>Destination</th>
+                                    <th>Protocol</th>
+                                    <th>Service</th>
+                                    <th>Alert Type</th>
+                                    <th>Risk Rate</th>
+                                    <th>Severity</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="critical-threats-list">
+                                <!-- All threats will be populated here via JavaScript -->
+                                <tr>
+                                    <td colspan="9" class="text-center">No threats detected yet</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <div class="row">
         <div class="col-md-12">
             <div class="card">
-                <div class="card-header bg-danger text-white">
-                    <h5 class="mb-0">Live Anomalies</h5>
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="fas fa-search"></i> Live Anomalies</h5>
                     <button id="report-selected-btn" class="btn btn-light btn-sm ml-auto" disabled>
                         <i class="fas fa-paper-plane"></i> Report Selected to Zero Day Sentinel
                     </button>
@@ -91,29 +148,6 @@
                             </tbody>
                         </table>
                     </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="row mt-4">
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header bg-dark text-white">
-                    <h5 class="mb-0">Anomaly Distribution</h5>
-                </div>
-                <div class="card-body">
-                    <canvas id="anomaly-chart" height="250"></canvas>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header bg-secondary text-white">
-                    <h5 class="mb-0">Protocol Distribution</h5>
-                </div>
-                <div class="card-body">
-                    <canvas id="protocol-chart" height="250"></canvas>
                 </div>
             </div>
         </div>
@@ -328,11 +362,19 @@
             }
         });
         
-        // Set up form submission
-        document.getElementById('detection-form').addEventListener('submit', function(e) {
-            e.preventDefault();
+        // Replace form submission with button click handler
+        document.getElementById('start-detection').addEventListener('click', function() {
+            // Create form data from the form elements
+            const formData = new FormData(document.getElementById('detection-form'));
             
-            const formData = new FormData(this);
+            // Update UI to show we're starting detection
+            document.getElementById('status-message').textContent = 'Starting detection...';
+            document.getElementById('detection-progress').style.width = '5%';
+            
+            // Disable the start button during submission
+            const startButton = document.getElementById('start-detection');
+            startButton.disabled = true;
+            startButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
             
             fetch('{{ url_for("anomaly.start_anomaly_detection_route") }}', {
                 method: 'POST',
@@ -340,14 +382,46 @@
             })
             .then(response => response.json())
             .then(data => {
+                // Re-enable the start button
+                startButton.disabled = false;
+                startButton.innerHTML = '<i class="fas fa-play"></i> Start Detection';
+                
                 if (data.success) {
-                    document.getElementById('status-message').textContent = 'Detection started';
-                    document.getElementById('detection-progress').style.width = '0%';
-                    // Start polling for updates
+                    document.getElementById('status-message').textContent = 'Detection started successfully';
+                    document.getElementById('detection-progress').style.width = '10%';
+                    
+                    // Clear existing threats and anomalies
+                    document.getElementById('anomalies-list').innerHTML = '<tr><td colspan="8" class="text-center">Loading anomalies...</td></tr>';
+                    document.getElementById('critical-threats-list').innerHTML = '<tr><td colspan="9" class="text-center">Loading threats...</td></tr>';
+                    
+                    // Stop any existing polling
+                    stopPolling();
+                    
+                    // Start polling immediately
                     startPolling();
+                    
+                    // Fetch threats and anomalies immediately
+                    fetchAnomalyUpdates();
+                    fetchCriticalThreats();
+                    
+                    // Set a timeout to fetch again after 2 seconds to ensure we catch the first batch
+                    setTimeout(() => {
+                        fetchAnomalyUpdates();
+                        fetchCriticalThreats();
+                    }, 2000);
                 } else {
-                    document.getElementById('status-message').textContent = 'Error: ' + data.error;
+                    document.getElementById('status-message').textContent = 'Error: ' + (data.error || 'Failed to start detection');
+                    document.getElementById('detection-progress').style.width = '0%';
                 }
+            })
+            .catch(error => {
+                // Re-enable the start button
+                startButton.disabled = false;
+                startButton.innerHTML = '<i class="fas fa-play"></i> Start Detection';
+                
+                console.error('Error starting detection:', error);
+                document.getElementById('status-message').textContent = 'Error: ' + error.message;
+                document.getElementById('detection-progress').style.width = '0%';
             });
         });
         
@@ -428,44 +502,84 @@
         
         // Start polling for updates initially in case detection is already running
         startPolling();
+        
+        // Initial fetch of critical threats
+        fetchCriticalThreats();
     });
     
     let pollingInterval;
+    let threatPollingInterval;
     
     function startPolling() {
-        // Clear any existing interval
+        // Clear any existing intervals
         if (pollingInterval) clearInterval(pollingInterval);
+        if (threatPollingInterval) clearInterval(threatPollingInterval);
         
-        // Poll every 2 seconds
+        console.log("Starting polling for anomaly updates and threats");
+        
+        // Poll every 2 seconds for anomaly updates
         pollingInterval = setInterval(fetchAnomalyUpdates, 2000);
+        
+        // Poll every 3 seconds for all threats
+        threatPollingInterval = setInterval(fetchCriticalThreats, 3000);
     }
     
     function stopPolling() {
-        if (pollingInterval) clearInterval(pollingInterval);
+        console.log("Stopping polling");
+        
+        if (pollingInterval) {
+            clearInterval(pollingInterval);
+            pollingInterval = null;
+        }
+        
+        if (threatPollingInterval) {
+            clearInterval(threatPollingInterval);
+            threatPollingInterval = null;
+        }
     }
     
     function fetchAnomalyUpdates() {
+        console.log("Fetching anomaly updates...");
+        
         fetch('{{ url_for("anomaly.get_anomaly_updates") }}')
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
-                updateDashboard(data);
+                if (data.success) {
+                    updateDashboard(data);
+                } else {
+                    console.error("Error fetching anomaly updates:", data.error);
+                }
+            })
+            .catch(error => {
+                console.error("Failed to fetch anomaly updates:", error);
             });
     }
     
     function updateDashboard(data) {
+        console.log("Updating dashboard with new data:", data);
+        
         // Update status
-        document.getElementById('status-message').textContent = data.status;
-        document.getElementById('detection-progress').style.width = data.progress + '%';
+        document.getElementById('status-message').textContent = data.status || 'Status Unknown';
+        document.getElementById('detection-progress').style.width = (data.progress || 0) + '%';
+        document.getElementById('detection-progress').setAttribute('aria-valuenow', data.progress || 0);
         
         // Update counts
-        document.getElementById('high-risk-count').textContent = data.high_risk_count;
-        document.getElementById('medium-risk-count').textContent = data.medium_risk_count;
-        document.getElementById('low-risk-count').textContent = data.low_risk_count;
+        document.getElementById('high-risk-count').textContent = data.high_risk_count || 0;
+        document.getElementById('medium-risk-count').textContent = data.medium_risk_count || 0;
+        document.getElementById('low-risk-count').textContent = data.low_risk_count || 0;
         
         // Update anomaly table if there are new anomalies
         if (data.anomalies && data.anomalies.length > 0) {
+            console.log(`Processing ${data.anomalies.length} new anomalies`);
             updateAnomalyTable(data.anomalies);
             updateCharts(data.anomalies);
+        } else {
+            console.log("No new anomalies in this update");
         }
     }
     
@@ -608,31 +722,46 @@
         // Set the anomaly data on the report button
         reportBtn.setAttribute('data-anomaly', JSON.stringify(anomaly));
         
+        // Make sure confidence is a number
+        const confidence = parseFloat(anomaly.confidence || anomaly.highest_confidence) || 0;
+        
+        // Format alert types
+        let alertTypes = '';
+        if (Array.isArray(anomaly.alert_types)) {
+            alertTypes = anomaly.alert_types.join(', ');
+        } else if (typeof anomaly.alert_types === 'string') {
+            alertTypes = anomaly.alert_types;
+        } else {
+            alertTypes = 'Unknown';
+        }
+        
         // Format the details HTML
         let detailsHtml = `
-            <div class="alert ${anomaly.highest_confidence >= 0.9 ? 'alert-danger' : anomaly.highest_confidence >= 0.7 ? 'alert-warning' : 'alert-info'}">
-                <strong>Confidence:</strong> ${(anomaly.highest_confidence * 100).toFixed(1)}% - 
-                ${anomaly.highest_confidence >= 0.9 ? 'High Risk' : anomaly.highest_confidence >= 0.7 ? 'Medium Risk' : 'Low Risk'}
+            <div class="alert ${confidence >= 0.9 ? 'alert-danger' : confidence >= 0.7 ? 'alert-warning' : 'alert-info'}">
+                <strong>Confidence:</strong> ${(confidence * 100).toFixed(1)}% - 
+                ${confidence >= 0.9 ? 'High Risk' : confidence >= 0.7 ? 'Medium Risk' : 'Low Risk'}
             </div>
             <div class="row">
                 <div class="col-md-6">
                     <h6>Basic Information</h6>
                     <table class="table table-sm">
                         <tr><th>Time</th><td>${anomaly.timestamp || 'Unknown'}</td></tr>
-                        <tr><th>Protocol</th><td>${anomaly.protocol_type}</td></tr>
-                        <tr><th>Service</th><td>${anomaly.service}</td></tr>
-                        <tr><th>Flag</th><td>${anomaly.flag}</td></tr>
-                        <tr><th>Alert Types</th><td>${anomaly.alert_types}</td></tr>
+                        <tr><th>Protocol</th><td>${anomaly.protocol || anomaly.protocol_type || 'Unknown'}</td></tr>
+                        <tr><th>Service</th><td>${anomaly.service || 'Unknown'}</td></tr>
+                        <tr><th>Flag</th><td>${anomaly.flag || 'Unknown'}</td></tr>
+                        <tr><th>Alert Types</th><td>${alertTypes}</td></tr>
+                        <tr><th>Source IP</th><td>${anomaly.source || anomaly.src_ip || 'Unknown'}</td></tr>
+                        <tr><th>Destination IP</th><td>${anomaly.destination || anomaly.dst_ip || 'Unknown'}</td></tr>
                     </table>
                 </div>
                 <div class="col-md-6">
                     <h6>Traffic Information</h6>
                     <table class="table table-sm">
-                        <tr><th>Duration</th><td>${anomaly.duration} s</td></tr>
-                        <tr><th>Source Bytes</th><td>${anomaly.src_bytes}</td></tr>
-                        <tr><th>Destination Bytes</th><td>${anomaly.dst_bytes}</td></tr>
-                        <tr><th>Connection Count</th><td>${anomaly.count}</td></tr>
-                        <tr><th>Service Count</th><td>${anomaly.srv_count}</td></tr>
+                        <tr><th>Duration</th><td>${anomaly.duration || 'N/A'} s</td></tr>
+                        <tr><th>Source Bytes</th><td>${anomaly.src_bytes || 'N/A'}</td></tr>
+                        <tr><th>Destination Bytes</th><td>${anomaly.dst_bytes || 'N/A'}</td></tr>
+                        <tr><th>Connection Count</th><td>${anomaly.count || 'N/A'}</td></tr>
+                        <tr><th>Service Count</th><td>${anomaly.srv_count || 'N/A'}</td></tr>
                     </table>
                 </div>
             </div>
@@ -640,13 +769,13 @@
             <div class="row">
                 <div class="col-md-6">
                     <table class="table table-sm">
-                        <tr><th>SYN Error Rate</th><td>${anomaly.serror_rate}</td></tr>
+                        <tr><th>SYN Error Rate</th><td>${anomaly.serror_rate || 'N/A'}</td></tr>
                         <tr><th>Service SYN Error Rate</th><td>${anomaly.srv_serror_rate || 'N/A'}</td></tr>
                     </table>
                 </div>
                 <div class="col-md-6">
                     <table class="table table-sm">
-                        <tr><th>REJ Error Rate</th><td>${anomaly.rerror_rate}</td></tr>
+                        <tr><th>REJ Error Rate</th><td>${anomaly.rerror_rate || 'N/A'}</td></tr>
                         <tr><th>Service REJ Error Rate</th><td>${anomaly.srv_rerror_rate || 'N/A'}</td></tr>
                     </table>
                 </div>
@@ -659,6 +788,14 @@
     }
     
     function reportThreat(anomaly) {
+        // Check if auto-reporting is enabled
+        const autoReport = document.getElementById('auto_report').checked;
+        
+        if (!autoReport) {
+            console.log("Auto-reporting disabled, skipping report to /threat endpoint");
+            return;
+        }
+        
         // Show the report modal
         $('#report-modal').modal('show');
         
@@ -908,6 +1045,140 @@
                         </td>
                     </tr>
                 `;
+            });
+    }
+
+    // Add functionality to fetch critical threats
+    function fetchCriticalThreats() {
+        console.log("Fetching all threats...");
+        
+        return fetch('{{ url_for("anomaly.get_critical_threats") }}')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log("Received response:", data);
+                
+                if (data.success) {
+                    const allThreats = data.critical_threats || [];
+                    const tableBody = document.getElementById('critical-threats-list');
+                    
+                    console.log(`Received ${allThreats.length} threats from server`);
+                    
+                    // Count threats by severity
+                    let criticalCount = 0;
+                    let highCount = 0;
+                    let mediumCount = 0;
+                    let lowCount = 0;
+                    
+                    allThreats.forEach(threat => {
+                        if (threat.severity === 'critical') criticalCount++;
+                        else if (threat.severity === 'high') highCount++;
+                        else if (threat.severity === 'medium') mediumCount++;
+                        else lowCount++;
+                    });
+                    
+                    // Update counters
+                    document.getElementById('critical-count').textContent = criticalCount;
+                    document.getElementById('high-count').textContent = highCount;
+                    document.getElementById('medium-count').textContent = mediumCount; 
+                    document.getElementById('low-count').textContent = lowCount;
+                    document.getElementById('total-threats').textContent = allThreats.length;
+                    
+                    if (allThreats.length === 0) {
+                        tableBody.innerHTML = `
+                            <tr>
+                                <td colspan="9" class="text-center">No threats detected yet</td>
+                            </tr>
+                        `;
+                        return;
+                    }
+                    
+                    // Clear existing rows
+                    tableBody.innerHTML = '';
+                    
+                    // Add each threat with appropriate styling based on severity
+                    allThreats.forEach(threat => {
+                        const row = document.createElement('tr');
+                        
+                        // Set row background based on severity
+                        if (threat.severity === 'critical') {
+                            row.className = 'table-danger';
+                        } else if (threat.severity === 'high') {
+                            row.className = 'table-warning';
+                        } else if (threat.severity === 'medium') {
+                            row.className = 'table-info';
+                        } else {
+                            row.className = 'table-light';
+                        }
+                        
+                        // Format alert types
+                        let alertTypes = '';
+                        if (Array.isArray(threat.alert_types)) {
+                            alertTypes = threat.alert_types.join(', ');
+                        } else if (typeof threat.alert_types === 'string') {
+                            alertTypes = threat.alert_types;
+                        } else {
+                            alertTypes = 'Unknown';
+                        }
+                        
+                        // Make sure confidence is a number
+                        const confidence = parseFloat(threat.confidence) || 0;
+                        
+                        row.innerHTML = `
+                            <td>${threat.timestamp || 'Unknown'}</td>
+                            <td>${threat.source || 'unknown'}</td>
+                            <td>${threat.destination || 'unknown'}</td>
+                            <td>${threat.protocol || 'unknown'}</td>
+                            <td>${threat.service || 'unknown'}</td>
+                            <td>${alertTypes}</td>
+                            <td>${(confidence * 100).toFixed(1)}%</td>
+                            <td>
+                                <span class="badge badge-${
+                                    threat.severity === 'critical' ? 'danger' : 
+                                    threat.severity === 'high' ? 'warning' : 
+                                    threat.severity === 'medium' ? 'info' : 'secondary'
+                                }">
+                                    ${(threat.severity || 'unknown').toUpperCase()}
+                                </span>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary view-details-btn" data-threat='${JSON.stringify(threat)}'>
+                                    <i class="fas fa-search"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-success manual-report-btn" data-threat='${JSON.stringify(threat)}'>
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </td>
+                        `;
+                        
+                        tableBody.appendChild(row);
+                    });
+                    
+                    // Add event listeners to the new buttons
+                    document.querySelectorAll('.view-details-btn').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const threat = JSON.parse(btn.getAttribute('data-threat'));
+                            showAnomalyDetails(threat);
+                            $('#anomaly-details-modal').modal('show');
+                        });
+                    });
+                    
+                    document.querySelectorAll('.manual-report-btn').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const threat = JSON.parse(btn.getAttribute('data-threat'));
+                            reportThreat(threat);
+                        });
+                    });
+                } else {
+                    console.error('Error fetching threats:', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching threats:', error);
             });
     }
 </script>

@@ -12,6 +12,7 @@ from datetime import datetime
 import queue
 import os
 import threading
+import requests
 
 # Import threat intelligence service
 try:
@@ -26,6 +27,16 @@ anomaly_queue = queue.Queue()
 
 # Global list for storing detected anomalies
 detected_anomalies = []
+
+# External threat reporting endpoint
+THREAT_ENDPOINT = "https://zero-day-sentinel.onrender.com/threat"
+BLOCKCHAIN_ENDPOINT = "https://zero-day-sentinel.onrender.com/chain"
+
+# Critical threshold for reporting to external endpoint
+CRITICAL_CONFIDENCE_THRESHOLD = 0.85
+
+# Global variable to control auto-reporting
+AUTO_REPORT_ENABLED = True
 
 class RuleBasedDetector:
     """
@@ -156,49 +167,59 @@ class RuleBasedDetector:
         
     def process_batch(self, batch):
         """
-        Process a batch of network connection records.
+        Process a batch of network traffic records.
         
         Args:
-            batch: Pandas DataFrame with network connection data
+            batch: DataFrame with network traffic records
             
         Returns:
-            DataFrame containing only the detected anomalies
+            List of detected anomalies with details
         """
-        all_anomalies = []
+        batch_anomalies = []
         
         for _, row in batch.iterrows():
+            # Apply rules
             alerts = self.check_rules(row)
+            
+            # If alerts found, create an anomaly entry
             if alerts:
-                # Add alerts to the row
-                row_data = row.to_dict()
-                row_data['alerts'] = alerts
-                row_data['highest_confidence'] = max([conf for _, conf in alerts])
-                row_data['alert_types'] = ', '.join([alert for alert, _ in alerts])
+                # Extract highest confidence score
+                highest_confidence = max([conf for _, conf in alerts])
                 
-                # Add timestamp if not present
-                if 'timestamp' not in row_data:
-                    row_data['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                # Create anomaly entry
+                anomaly = {
+                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'src_ip': row.get('src_ip', 'unknown'),
+                    'dst_ip': row.get('dst_ip', 'unknown'),
+                    'protocol_type': row.get('protocol_type', 'unknown'),
+                    'service': row.get('service', 'unknown'),
+                    'flag': row.get('flag', 'unknown'),
+                    'duration': row.get('duration', 0),
+                    'src_bytes': row.get('src_bytes', 0),
+                    'dst_bytes': row.get('dst_bytes', 0),
+                    'alert_types': [alert_type for alert_type, _ in alerts],
+                    'confidence_scores': [conf for _, conf in alerts],
+                    'highest_confidence': highest_confidence
+                }
                 
-                all_anomalies.append(row_data)
+                # Add anomaly to results
+                batch_anomalies.append(anomaly)
                 
-                # Add to real-time queue for dashboard updates
-                anomaly_queue.put(row_data)
+                # Add to global queue for real-time updates
+                anomaly_queue.put(anomaly)
                 
-                # Add to global list of detected anomalies
-                global detected_anomalies
-                detected_anomalies.append(row_data)
+                # Keep track of top anomalies
+                detected_anomalies.append(anomaly)
                 
-                # If threat intel is available and it's a high confidence alert, report it
-                if THREAT_INTEL_AVAILABLE and row_data['highest_confidence'] > 0.8:
-                    try:
-                        threat_intel.report_anomaly(row_data)
-                    except Exception as e:
-                        print(f"Error reporting to threat intelligence: {str(e)}")
+                # Send critical threats to external endpoint if auto-reporting is enabled
+                if highest_confidence >= CRITICAL_CONFIDENCE_THRESHOLD and AUTO_REPORT_ENABLED:
+                    threading.Thread(target=send_to_threat_endpoint, args=(anomaly,)).start()
         
-        if all_anomalies:
-            return pd.DataFrame(all_anomalies)
-        else:
-            return pd.DataFrame()
+        # Keep only the most recent anomalies
+        if len(detected_anomalies) > 100:
+            detected_anomalies.pop(0)
+        
+        return batch_anomalies
 
 # Function to get the latest anomalies from the queue
 def get_latest_anomalies(max_items=10):
@@ -269,7 +290,7 @@ def process_kdd_dataset(file_path, batch_size=100, sleep_interval=1):
             if len(anomalies) > 0:
                 print(f"Batch {batch_count}: Found {len(anomalies)} anomalies")
                 # Print first anomaly for debugging
-                first_anomaly = anomalies.iloc[0].to_dict() if not anomalies.empty else {}
+                first_anomaly = anomalies[0] if anomalies else {}
                 print(f"Sample anomaly: {first_anomaly}")
             else:
                 print(f"Batch {batch_count}: No anomalies detected")
@@ -411,6 +432,52 @@ def fetch_external_threats():
     except Exception as e:
         print(f"Error fetching external threats: {str(e)}")
         return None
+
+def send_to_threat_endpoint(anomaly):
+    """
+    Send critical threats to the external threat endpoint.
+    
+    Args:
+        anomaly: Dictionary containing anomaly details
+    """
+    # Skip if auto-reporting is disabled
+    if not AUTO_REPORT_ENABLED:
+        print("Auto-reporting disabled, skipping report to /threat endpoint")
+        return
+        
+    try:
+        threat_data = {
+            'timestamp': anomaly['timestamp'],
+            'source_ip': anomaly['src_ip'],
+            'destination_ip': anomaly['dst_ip'],
+            'protocol': anomaly['protocol_type'],
+            'service': anomaly['service'],
+            'flag': anomaly['flag'],
+            'alert_types': anomaly['alert_types'],
+            'confidence': anomaly['highest_confidence'],
+            'severity': 'critical' if anomaly['highest_confidence'] >= 0.9 else 'high',
+            'details': {
+                'src_bytes': anomaly['src_bytes'],
+                'dst_bytes': anomaly['dst_bytes'],
+                'duration': anomaly['duration']
+            }
+        }
+        
+        # Send to external threat endpoint
+        response = requests.post(
+            THREAT_ENDPOINT,
+            json=threat_data,
+            headers={'Content-Type': 'application/json'},
+            timeout=10
+        )
+        
+        if response.status_code in [200, 201]:
+            print(f"Successfully reported critical threat to {THREAT_ENDPOINT}")
+        else:
+            print(f"Failed to report threat: HTTP {response.status_code}")
+            
+    except Exception as e:
+        print(f"Error reporting threat: {str(e)}")
 
 # For testing
 if __name__ == "__main__":

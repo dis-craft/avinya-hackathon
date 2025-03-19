@@ -295,30 +295,17 @@
     <div class="security-features">
         <h4 class="mb-4">Security Features</h4>
         <div class="row">
-            <div class="col-md-6">
+            <div class="col-md-12">
                 <div class="feature-card">
                     <div class="card-body">
-                        <h5><i class="fas fa-network-wired text-primary mr-2"></i> Network Security</h5>
-                        <p>Monitor your network traffic for suspicious activity and detect potential threats in real-time.</p>
+                        <h5><i class="fas fa-shield-alt text-danger mr-2"></i> Critical Threat Detection</h5>
+                        <p>Monitor network traffic for high-severity threats and view critical security alerts in real-time.</p>
                         <a href="{{ url_for('anomaly.anomaly_detection_dashboard') }}" class="btn btn-zomato">
-                            <i class="fas fa-shield-alt"></i> Network Anomaly Detection
+                            <i class="fas fa-radar"></i> View Critical Threats
                         </a>
                     </div>
                 </div>
             </div>
-            {% if session.role == 'admin' %}
-            <div class="col-md-6">
-                <div class="feature-card">
-                    <div class="card-body">
-                        <h5><i class="fas fa-bug text-danger mr-2"></i> Security Scan</h5>
-                        <p>Run comprehensive security scans to identify vulnerabilities in your system.</p>
-                        <a href="{{ url_for('admin.security_scan') }}" class="btn btn-zomato">
-                            <i class="fas fa-search"></i> Run Security Scan
-                        </a>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
         </div>
     </div>
 </div>
