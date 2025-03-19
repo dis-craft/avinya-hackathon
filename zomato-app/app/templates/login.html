@@ -2,36 +2,127 @@
 
 {% block title %}Zomato - Login{% endblock %}
 
+{% block head_extra %}
+<style>
+    .login-container {
+        max-width: 450px;
+        margin: 60px auto;
+    }
+    .login-card {
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        border: none;
+        overflow: hidden;
+    }
+    .login-header {
+        background-color: white;
+        padding: 25px 30px 5px;
+        border-bottom: none;
+    }
+    .login-header h3 {
+        color: #1c1c1c;
+        font-weight: 600;
+        margin-bottom: 0;
+        font-size: 1.8rem;
+    }
+    .login-body {
+        padding: 25px 30px 30px;
+    }
+    .form-control {
+        height: 50px;
+        border-radius: 8px;
+        padding: 10px 15px;
+        border: 1px solid #e0e0e0;
+        transition: all 0.3s ease;
+    }
+    .form-control:focus {
+        border-color: #e23744;
+        box-shadow: 0 0 0 3px rgba(226, 55, 68, 0.12);
+    }
+    label {
+        font-weight: 500;
+        margin-bottom: 8px;
+        color: #1c1c1c;
+    }
+    .btn-zomato {
+        background-color: #e23744;
+        border: none;
+        height: 50px;
+        font-weight: 600;
+        font-size: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(226, 55, 68, 0.3);
+        transition: all 0.3s ease;
+    }
+    .btn-zomato:hover {
+        background-color: #b11226;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(226, 55, 68, 0.4);
+    }
+    .demo-creds {
+        padding: 15px;
+        background-color: #f8f8f8;
+        border-radius: 8px;
+        margin-top: 30px;
+    }
+    .demo-creds p {
+        margin-bottom: 6px;
+        color: #696969;
+    }
+    .demo-creds p:first-child {
+        font-weight: 600;
+        color: #1c1c1c;
+    }
+    .login-logo {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+    .login-logo h1 {
+        color: #e23744;
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 0;
+    }
+    .login-logo p {
+        color: #696969;
+        font-size: 1rem;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container mt-5">
-    <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <h3 class="mb-0">Login</h3>
-                </div>
-                <div class="card-body">
-                    {% if error %}
-                    <div class="alert alert-danger">{{ error }}</div>
-                    {% endif %}
-                    
-                    <form method="post" action="{{ url_for('auth.login') }}">
-                        <div class="form-group">
-                            <label for="username">Username</label>
-                            <input type="text" class="form-control" id="username" name="username" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="password">Password</label>
-                            <input type="password" class="form-control" id="password" name="password" required>
-                        </div>
-                        <button type="submit" class="btn btn-primary btn-block">Login</button>
-                    </form>
-                    
-                    <div class="mt-3 text-center">
-                        <p>Demo credentials:</p>
-                        <p><strong>Admin:</strong> admin / admin123</p>
-                        <p><strong>User:</strong> user1 / password123</p>
+<div class="container">
+    <div class="login-container">
+        <div class="login-logo">
+            <h1><i class="fas fa-utensils"></i> Zomato</h1>
+            <p>Discover the best food & drinks</p>
+        </div>
+        
+        <div class="card login-card">
+            <div class="login-header">
+                <h3>Login</h3>
+            </div>
+            <div class="login-body">
+                {% if error %}
+                <div class="alert alert-danger">{{ error }}</div>
+                {% endif %}
+                
+                <form method="post" action="{{ url_for('auth.login') }}">
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input type="text" class="form-control" id="username" name="username" placeholder="Enter your username" required>
                     </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" class="form-control" id="password" name="password" placeholder="Enter your password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block btn-zomato">Login</button>
+                </form>
+                
+                <div class="demo-creds">
+                    <p>Demo credentials:</p>
+                    <p><strong>Admin:</strong> admin / admin123</p>
+                    <p><strong>User:</strong> user1 / password123</p>
                 </div>
             </div>
         </div>

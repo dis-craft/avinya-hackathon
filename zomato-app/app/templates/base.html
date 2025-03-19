@@ -9,14 +9,66 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    <style>
+        :root {
+            --primary-color: #e23744;
+            --primary-dark: #b11226;
+            --primary-light: #ff5a60;
+            --secondary-color: #1c1c1c;
+        }
+        body {
+            font-family: 'Poppins', sans-serif;
+        }
+        .navbar {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            background-color: white !important;
+            padding: 12px 0;
+        }
+        .navbar-brand {
+            color: #e23744 !important;
+            font-weight: 700;
+            font-size: 1.6rem;
+            letter-spacing: -0.5px;
+        }
+        .navbar-brand i {
+            margin-right: 5px;
+        }
+        .nav-link {
+            color: #1c1c1c !important;
+            font-weight: 500;
+            padding: 8px 16px !important;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        .nav-link:hover {
+            color: #e23744 !important;
+            background-color: rgba(226, 55, 68, 0.08);
+        }
+        .footer {
+            background-color: white !important;
+            border-top: 1px solid #ebebeb;
+        }
+        .text-muted {
+            color: #696969 !important;
+        }
+        .container-fluid {
+            padding: 0 !important;
+        }
+        main {
+            min-height: calc(100vh - 150px);
+        }
+    </style>
     
     {% block head_extra %}{% endblock %}
 </head>
 <body>
     <!-- Navigation Bar -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
         <div class="container">
             <a class="navbar-brand" href="{{ url_for('main.index') }}">
                 <i class="fas fa-utensils"></i> Zomato
@@ -48,7 +100,7 @@
     </nav>
     
     <!-- Page Content -->
-    <main role="main" class="container-fluid">
+    <main role="main">
         {% block content %}{% endblock %}
     </main>
     
