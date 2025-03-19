@@ -1,0 +1,266 @@
+from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify
+import os
+import threading
+from datetime import datetime
+from app.services.anomaly_detection.detector import start_anomaly_detection, get_latest_anomalies
+import requests
+
+anomaly_bp = Blueprint('anomaly', __name__)
+
+# Global variable for anomaly detection status
+anomaly_detection_status = {
+    'running': False,
+    'progress': 0,
+    'high_risk_count': 0,
+    'medium_risk_count': 0,
+    'low_risk_count': 0
+}
+
+@anomaly_bp.route('/anomaly_detection')
+def anomaly_detection_dashboard():
+    """
+    Display the network anomaly detection dashboard.
+    This is integrated with the KDD dataset for real-time simulation.
+    """
+    if not session.get('logged_in'):
+        return redirect(url_for('auth.login'))
+    
+    return render_template('anomaly_dashboard.html')
+
+@anomaly_bp.route('/anomaly_detection/start', methods=['POST'])
+def start_anomaly_detection_route():
+    """
+    Start the anomaly detection process with the selected dataset.
+    """
+    if not session.get('logged_in'):
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    # Get parameters from form
+    dataset = request.form.get('dataset', 'kdd_test')
+    batch_size = int(request.form.get('batch_size', 100))
+    sleep_interval = int(request.form.get('sleep_interval', 5))
+    
+    # Determine dataset path
+    if dataset == 'kdd_train':
+        dataset_path = os.path.join('data_kdd', 'kdd_train.csv')
+    else:
+        dataset_path = os.path.join('data_kdd', 'kdd_test.csv')
+    
+    # Start detection
+    success = start_anomaly_detection(dataset_path)
+    
+    # Store detection status
+    global anomaly_detection_status
+    anomaly_detection_status = {
+        'running': success,
+        'dataset': dataset,
+        'batch_size': batch_size,
+        'sleep_interval': sleep_interval,
+        'start_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'progress': 0,
+        'high_risk_count': 0,
+        'medium_risk_count': 0,
+        'low_risk_count': 0
+    }
+    
+    return jsonify({'success': success, 'error': None if success else 'Failed to start detection'})
+
+@anomaly_bp.route('/anomaly_detection/stop', methods=['POST'])
+def stop_anomaly_detection():
+    """
+    Stop the anomaly detection process.
+    """
+    if not session.get('logged_in'):
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    global anomaly_detection_status
+    anomaly_detection_status['running'] = False
+    
+    return jsonify({'success': True})
+
+@anomaly_bp.route('/anomaly_detection/updates')
+def get_anomaly_updates():
+    """
+    Get updates on anomaly detection progress and new anomalies.
+    """
+    if not session.get('logged_in'):
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    # Get latest anomalies from the queue
+    anomalies = get_latest_anomalies(max_items=10)
+    
+    global anomaly_detection_status
+    
+    # Update counters based on new anomalies
+    for anomaly in anomalies:
+        if anomaly.get('highest_confidence', 0) >= 0.9:
+            anomaly_detection_status['high_risk_count'] += 1
+        elif anomaly.get('highest_confidence', 0) >= 0.7:
+            anomaly_detection_status['medium_risk_count'] += 1
+        else:
+            anomaly_detection_status['low_risk_count'] += 1
+    
+    # Increment progress (simulate progress)
+    if anomaly_detection_status.get('running', False):
+        anomaly_detection_status['progress'] += 1
+        if anomaly_detection_status['progress'] > 100:
+            anomaly_detection_status['progress'] = 0
+    
+    # Prepare response
+    response = {
+        'success': True,
+        'status': 'Running' if anomaly_detection_status.get('running', False) else 'Stopped',
+        'progress': anomaly_detection_status.get('progress', 0),
+        'high_risk_count': anomaly_detection_status.get('high_risk_count', 0),
+        'medium_risk_count': anomaly_detection_status.get('medium_risk_count', 0),
+        'low_risk_count': anomaly_detection_status.get('low_risk_count', 0),
+        'anomalies': [
+            {
+                'timestamp': a.get('timestamp', datetime.now().strftime('%Y-%m-%d %H:%M:%S')),
+                'protocol_type': a.get('protocol_type', 'unknown'),
+                'service': a.get('service', 'unknown'),
+                'flag': a.get('flag', 'unknown'),
+                'alert_types': a.get('alert_types', ''),
+                'highest_confidence': a.get('highest_confidence', 0)
+            } for a in anomalies
+        ]
+    }
+    
+    return jsonify(response)
+
+@anomaly_bp.route('/anomaly_detection/report_threat', methods=['POST'])
+def report_threat():
+    """
+    Report a detected threat to the Zero Day Sentinel service.
+    """
+    if not session.get('logged_in'):
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    # Get the threat data from the request
+    try:
+        threat_data = request.json
+        
+        # Post the threat to Zero Day Sentinel
+        response = requests.post(
+            'https://zero-day-sentinel.onrender.com/threat',
+            json=threat_data,
+            headers={'Content-Type': 'application/json'},
+            timeout=10
+        )
+        
+        if response.status_code in [200, 201]:
+            return jsonify({
+                'success': True, 
+                'message': 'Threat reported successfully',
+                'response': response.json() if response.content else None,
+                'threat_id': threat_data.get('id')
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Failed to report threat: HTTP {response.status_code}',
+                'response': response.text
+            })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error reporting threat: {str(e)}'
+        })
+
+@anomaly_bp.route('/anomaly_detection/verify_threat', methods=['GET'])
+def verify_threat():
+    """
+    Verify if a reported threat exists in the Zero Day Sentinel blockchain.
+    """
+    if not session.get('logged_in'):
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    threat_id = request.args.get('threat_id')
+    if not threat_id:
+        return jsonify({'success': False, 'error': 'No threat ID provided'})
+    
+    try:
+        # Fetch the blockchain data
+        response = requests.get(
+            'https://zero-day-sentinel.onrender.com/chain',
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            blockchain_data = response.json()
+            
+            # Look for the threat in the blockchain
+            found = False
+            block_index = -1
+            
+            for i, block in enumerate(blockchain_data):
+                if 'transactions' in block:
+                    for transaction in block['transactions']:
+                        if transaction.get('id') == threat_id:
+                            found = True
+                            block_index = i
+                            break
+                    if found:
+                        break
+            
+            return jsonify({
+                'success': True,
+                'found': found,
+                'block_index': block_index if found else -1
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Failed to fetch blockchain: HTTP {response.status_code}',
+                'response': response.text
+            })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error verifying threat: {str(e)}'
+        })
+
+@anomaly_bp.route('/anomaly_detection/blockchain', methods=['GET'])
+def get_blockchain():
+    """
+    Get the latest blockchain data from Zero Day Sentinel.
+    """
+    if not session.get('logged_in'):
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        # Fetch the blockchain data
+        response = requests.get(
+            'https://zero-day-sentinel.onrender.com/chain',
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            blockchain_data = response.json()
+            
+            # Extract threats from blockchain
+            threats = []
+            for block in blockchain_data:
+                if 'transactions' in block:
+                    for transaction in block['transactions']:
+                        threats.append(transaction)
+            
+            return jsonify({
+                'success': True,
+                'threats': threats,
+                'blockchain': blockchain_data
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Failed to fetch blockchain: HTTP {response.status_code}',
+                'response': response.text
+            })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error fetching blockchain: {str(e)}'
+        }) 
