@@ -1,0 +1,7 @@
+rules:
+  - id: insecure-sql-concatenation
+    languages: [python]
+    message: "Avoid using string concatenation in SQL queries to prevent SQL injection vulnerabilities."
+    severity: HIGH
+    pattern: |
+      cursor.execute("SELECT * FROM users WHERE username = '" + $USERNAME + "'")
